@@ -1,13 +1,269 @@
-const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MyTube</title><style>
-*{box-sizing:border-box}body{margin:0;background:#0f0f0f;color:#eee;font:15px Arial,sans-serif}header{position:sticky;top:0;background:#151515;padding:14px 4%;display:flex;gap:18px;align-items:center;border-bottom:1px solid #333;z-index:2}.logo{font-size:22px;font-weight:bold;white-space:nowrap}form{display:flex;max-width:720px;flex:1;margin:auto}input{min-width:0;flex:1;background:#111;color:#fff;border:1px solid #555;border-radius:24px 0 0 24px;padding:12px 18px;font-size:16px}button{cursor:pointer;background:#333;color:#fff;border:0;padding:12px 20px;border-radius:0 24px 24px 0}main{max-width:1450px;margin:24px auto;padding:0 22px}.hint{color:#aaa;margin-bottom:20px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:25px 18px}.video{cursor:pointer;min-width:0}.thumb{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:11px;background:#222}.title{font-weight:600;line-height:1.4;margin:8px 0 5px}.channel{color:#aaa;font-size:13px}.video:hover .title{color:#3ea6ff}.player{display:none;grid-template-columns:minmax(0,1fr) 330px;gap:22px}.player.active{display:grid}.frame{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;background:#000}.back{border-radius:20px;margin-bottom:12px}.related{display:grid;gap:12px}.related .video{display:grid;grid-template-columns:130px 1fr;gap:10px}.related .title{font-size:13px;margin:0}.related .thumb{border-radius:8px}@media(max-width:800px){.player.active{grid-template-columns:1fr}}@media(max-width:550px){header{padding:10px}.logo{font-size:17px}main{padding:0 12px}.grid{grid-template-columns:1fr}}
-</style></head><body><header><div class="logo">▶ MyTube</div><form id="search"><input id="q" placeholder="유튜브 동영상 검색" required><button>검색</button></form></header><main><div id="status" class="hint">검색어를 입력해 영상을 찾아보세요.</div><section id="results" class="grid"></section><section id="watch" class="player"><div><button class="back" id="back">← 검색 결과</button><iframe id="frame" class="frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><h2 id="watchTitle"></h2><div id="watchChannel" class="channel"></div></div><aside><h3>검색 결과</h3><div id="related" class="related"></div></aside></section></main>
+const html = `
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyTube</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #0f0f0f;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+header {
+  background: #181818;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.logo {
+  color: #ff3333;
+  font-size: 24px;
+  font-weight: bold;
+}
+.search {
+  display: flex;
+  flex: 1;
+  max-width: 650px;
+  margin: auto;
+}
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #444;
+  background: #222;
+  color: white;
+  font-size: 16px;
+  border-radius: 8px 0 0 8px;
+}
+button {
+  padding: 12px 18px;
+  background: #333;
+  color: white;
+  border: 0;
+  cursor: pointer;
+  border-radius: 0 8px 8px 0;
+}
+main { padding: 20px; }
+#videos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}
+.video {
+  cursor: pointer;
+  min-width: 0;
+}
+.video img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.video h3 {
+  font-size: 15px;
+  margin: 9px 0;
+  line-height: 1.4;
+}
+#player {
+  display: none;
+  margin-bottom: 25px;
+}
+#player iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 10px;
+}
+#player h2 { font-size: 20px; }
+#status { color: #aaa; }
+@media (max-width: 600px) {
+  header { padding: 10px; gap: 10px; }
+  .logo { font-size: 19px; }
+  main { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">▶ MyTube</div>
+  <form class="search" id="searchForm">
+    <input id="query" placeholder="YouTube 동영상 검색" required>
+    <button type="submit">검색</button>
+  </form>
+</header>
+<main>
+  <section id="player">
+    <iframe id="frame"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen>
+    </iframe>
+    <h2 id="playingTitle"></h2>
+    <h3>관련 동영상</h3>
+  </section>
+  <p id="status">검색어를 입력해 동영상을 찾아보세요.</p>
+  <section id="videos"></section>
+</main>
 <script>
-const $=s=>document.querySelector(s);let items=[];
-function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function card(v){let id=v.id.videoId||v.id,t=v.snippet.title,c=v.snippet.channelTitle,im=v.snippet.thumbnails.high?.url||v.snippet.thumbnails.medium?.url||v.snippet.thumbnails.default?.url||'';return `<article class="video" data-id="${esc(id)}" data-title="${esc(t)}" data-channel="${esc(c)}"><img class="thumb" src="${esc(im)}" loading="lazy"><div class="title">${esc(t)}</div><div class="channel">${esc(c)}</div></article>`}
-function bind(root){root.querySelectorAll('.video').forEach(e=>e.onclick=()=>play(e.dataset.id,e.dataset.title,e.dataset.channel))}
-function play(id,t,c){$('#results').style.display='none';$('#watch').classList.add('active');$('#frame').src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1';$('#watchTitle').textContent=t;$('#watchChannel').textContent=c;$('#related').innerHTML=items.filter(v=>(v.id.videoId||v.id)!==id).map(card).join('');bind($('#related'));window.scrollTo(0,0)}
-$('#back').onclick=()=>{$('#frame').src='';$('#watch').classList.remove('active');$('#results').style.display='grid'}
-$('#search').onsubmit=async e=>{e.preventDefault();let q=$('#q').value.trim();$('#status').textContent='검색 중…';$('#results').innerHTML='';$('#watch').classList.remove('active');$('#frame').src='';$('#results').style.display='grid';try{let r=await fetch('/api/search?q='+encodeURIComponent(q)),d=await r.json();if(!r.ok)throw Error(d.error||'검색 실패');items=d.items||[];$('#results').innerHTML=items.map(card).join('')||'검색 결과가 없어요.';bind($('#results'));$('#status').textContent=`"${q}" 검색 결과 · ${items.length}개`}catch(x){$('#status').textContent='오류: '+x.message}};
-</script></body></html>`;
-export default {async fetch(request,env){const u=new URL(request.url);if(u.pathname==='/api/search'){let q=(u.searchParams.get('q')||'').trim();if(!q)return Response.json({error:'검색어를 입력해 주세요.'},{status:400});if(!env.YOUTUBE_API_KEY)return Response.json({error:'YouTube API 키가 아직 설정되지 않았어요.'},{status:503});let a=new URL('https://www.googleapis.com/youtube/v3/search');for(const [k,v] of Object.entries({part:'snippet',type:'video',maxResults:'24',q,key:env.YOUTUBE_API_KEY}))a.searchParams.set(k,v);let r=await fetch(a),d=await r.json();if(!r.ok)return Response.json({error:d.error?.message||'YouTube API 오류'},{status:502});return Response.json({items:d.items||[]},{headers:{'Cache-Control':'public, max-age=60'}})}if(u.pathname==='/')return new Response(html,{headers:{'content-type':'text/html; charset=UTF-8'}});return new Response('Not found',{status:404})}};
+const form = document.getElementById("searchForm");
+const queryInput = document.getElementById("query");
+const videos = document.getElementById("videos");
+const statusText = document.getElementById("status");
+const player = document.getElementById("player");
+const frame = document.getElementById("frame");
+const playingTitle = document.getElementById("playingTitle");
+
+let lastResults = [];
+
+function showVideos(items) {
+  lastResults = items;
+  videos.innerHTML = "";
+
+  if (!items.length) {
+    statusText.textContent = "검색 결과가 없습니다.";
+    return;
+  }
+
+  statusText.textContent = "검색 결과 " + items.length + "개";
+
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "video";
+
+    const img = document.createElement("img");
+    img.src = item.thumbnail;
+    img.alt = "";
+
+    const title = document.createElement("h3");
+    title.textContent = item.title;
+
+    card.append(img, title);
+    card.addEventListener("click", () => {
+      player.style.display = "block";
+      frame.src =
+        "https://www.youtube-nocookie.com/embed/" +
+        encodeURIComponent(item.id) +
+        "?autoplay=1";
+      playingTitle.textContent = item.title;
+      player.scrollIntoView({ behavior: "smooth" });
+    });
+
+    videos.appendChild(card);
+  });
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const query = queryInput.value.trim();
+  if (!query) return;
+
+  statusText.textContent = "검색 중...";
+  videos.innerHTML = "";
+  player.style.display = "none";
+  frame.src = "";
+
+  try {
+    const response = await fetch(
+      "/api/search?q=" + encodeURIComponent(query)
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "검색에 실패했습니다.");
+    }
+
+    showVideos(data.items || []);
+  } catch (error) {
+    statusText.textContent = "오류: " + error.message;
+  }
+});
+</script>
+</body>
+</html>
+`;
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/") {
+      return new Response(html, {
+        headers: {
+          "content-type": "text/html; charset=UTF-8"
+        }
+      });
+    }
+
+    if (url.pathname === "/api/search") {
+      const query = url.searchParams.get("q");
+
+      if (!query) {
+        return Response.json(
+          { error: "검색어를 입력해 주세요." },
+          { status: 400 }
+        );
+      }
+
+      if (!env.YOUTUBE_API_KEY) {
+        return Response.json(
+          { error: "YouTube API 키가 아직 설정되지 않았습니다." },
+          { status: 500 }
+        );
+      }
+
+      const apiUrl = new URL(
+        "https://www.googleapis.com/youtube/v3/search"
+      );
+
+      apiUrl.search = new URLSearchParams({
+        part: "snippet",
+        type: "video",
+        maxResults: "24",
+        q: query,
+        key: env.YOUTUBE_API_KEY
+      });
+
+      const apiResponse = await fetch(apiUrl);
+      const result = await apiResponse.json();
+
+      if (!apiResponse.ok) {
+        return Response.json(
+          { error: result.error?.message || "YouTube 검색 오류" },
+          { status: apiResponse.status }
+        );
+      }
+
+      const items = (result.items || [])
+        .filter((item) => item.id?.videoId)
+        .map((item) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          thumbnail:
+            item.snippet.thumbnails?.high?.url ||
+            item.snippet.thumbnails?.medium?.url ||
+            item.snippet.thumbnails?.default?.url
+        }));
+
+      return Response.json(
+        { items },
+        {
+          headers: {
+            "Cache-Control": "public, max-age=60"
+          }
+        }
+      );
+    }
+
+    return new Response("Not Found", { status: 404 });
+  }
+};
